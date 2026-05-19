@@ -1,0 +1,481 @@
+Build a complete Python FastAPI backend for FinSight AI.
+This is version 2 — it adds a new /predict endpoint 
+alongside all previous endpoints.
+
+Frontend runs on http://localhost:3000
+Backend runs on http://localhost:8000
+
+---
+
+TECH STACK:
+fastapi, uvicorn, httpx, 
+google-generativeai, python-dotenv, pydantic
+
+pip install fastapi uvicorn httpx 
+google-generativeai python-dotenv pydantic
+
+---
+
+FOLDER STRUCTURE:
+
+finsight-backend/
+├── main.py
+├── .env
+├── .env.example
+├── requirements.txt
+├── routers/
+│   ├── __init__.py
+│   ├── prices.py
+│   ├── news.py
+│   ├── analysis.py
+│   ├── prediction.py
+│   └── alerts.py
+├── services/
+│   ├── __init__.py
+│   ├── coingecko.py
+│   ├── gold.py
+│   ├── forex.py
+│   ├── stocks.py
+│   ├── gnews.py
+│   └── gemini.py
+├── models/
+│   ├── __init__.py
+│   └── schemas.py
+└── utils/
+    ├── __init__.py
+    └── technicals.py
+
+---
+
+ENVIRONMENT VARIABLES:
+
+GEMINI_API_KEY=your_key
+GNEWS_API_KEY=your_key
+
+---
+
+CORS — exact configuration:
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000",
+        "http://127.0.0.1:3000"
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+---
+
+ASSET CATEGORIES AND IDS:
+
+Kripto: bitcoin, ethereum, binancecoin, 
+        solana, ripple
+Döviz: usd, eur, gbp, gold, silver
+Hisse: thyao, garan, asels, eregl, bimas
+
+---
+
+SCHEMAS (models/schemas.py):
+
+All previous schemas PLUS these new ones:
+
+PredictRequest:
+- asset: str
+- asset_name: str
+- category: str ("kripto" | "doviz" | "hisse")
+- amount: float
+- buy_price: float
+- unit: str | None (e.g. "gram", "adet", "lot")
+
+PredictionPeriod:
+- price: float
+- change_percent: float
+- profit_loss: float
+- is_profit: bool
+
+PredictionChartPoint:
+- label: str
+- price: float
+
+PredictResponse:
+- asset: str
+- asset_name: str
+- amount: float
+- buy_price: float
+- current_price: float
+- total_cost: float
+- current_value: float
+- current_profit_loss: float
+- predictions: dict with keys:
+    "1_hafta", "1_ay", "3_ay", "6_ay"
+    each value is PredictionPeriod
+- chart_data: list[PredictionChartPoint]
+- analysis: str
+- key_factors: list[str]
+- risk_level: str ("DÜŞÜK" | "ORTA" | "YÜKSEK")
+- disclaimer: str
+
+---
+
+SERVICE: services/coingecko.py
+
+Same as before. Handle these coin IDs:
+bitcoin, ethereum, binancecoin, solana, ripple
+
+async def get_crypto_price(coin_id: str) -> dict
+async def get_price_history(
+    coin_id: str, days: int = 30) -> list
+
+Use try/except. Timeout 10s.
+Raise HTTPException(503) on failure.
+
+---
+
+SERVICE: services/gold.py
+
+async def get_gold_price() -> dict:
+  GET https://api.metals.live/v1/spot
+  Extract gold price (field: "gold")
+  Also extract silver (field: "silver") 
+  for silver asset.
+  Return PriceResponse format.
+
+async def get_metal_price(metal: str) -> dict:
+  metal: "gold" | "silver"
+  Reuse metals.live endpoint.
+
+async def get_gold_history(days: int = 30) -> list:
+  Generate mock history from current price.
+  ±1.5% daily variation.
+  Return [[timestamp_ms, price], ...]
+
+---
+
+SERVICE: services/forex.py
+
+Use this FREE API (no key needed):
+https://api.frankfurter.app
+
+async def get_forex_rate(currency: str) -> dict:
+  Map:
+  "usd" → base="USD", target="TRY"
+  "eur" → base="EUR", target="TRY"  
+  "gbp" → base="GBP", target="TRY"
+  
+  GET https://api.frankfurter.app/latest
+  Params: from={base}, to=TRY
+  
+  Extract rates.TRY as price.
+  Return PriceResponse with:
+  - symbol: currency.upper()
+  - name: full name of currency in Turkish
+  - price in TRY
+
+async def get_forex_history(
+    currency: str, days: int = 30) -> list:
+  GET https://api.frankfurter.app/{start_date}..
+  Params: from={base}, to=TRY
+  start_date = today minus days
+  Return [[timestamp_ms, price], ...]
+
+---
+
+SERVICE: services/stocks.py
+
+BIST stocks: thyao, garan, asels, eregl, bimas
+No free reliable BIST API exists.
+Use mock data that looks realistic:
+
+STOCK_DATA = {
+    "thyao": { "name": "Türk Hava Yolları", "symbol": "THYAO", "base_price": 285.40 },
+    "garan": { "name": "Garanti BBVA", "symbol": "GARAN", "base_price": 112.80 },
+    "asels": { "name": "Aselsan", "symbol": "ASELS", "base_price": 68.50 },
+    "eregl": { "name": "Ereğli Demir Çelik", "symbol": "EREGL", "base_price": 45.20 },
+    "bimas": { "name": "BİM Mağazaları", "symbol": "BIMAS", "base_price": 498.60 }
+}
+
+async def get_stock_price(stock_id: str) -> dict:
+  Get base price from STOCK_DATA.
+  Add random ±2% variation.
+  Simulate change_24h with random ±3%.
+  Return PriceResponse format with TRY prices.
+
+async def get_stock_history(
+    stock_id: str, days: int = 30) -> list:
+  Generate from base price with 
+  random ±2% daily walk.
+  Return [[timestamp_ms, price], ...]
+
+---
+
+SERVICE: services/gnews.py
+
+Same as before but extend query mapping:
+
+QUERY_MAP = {
+    "bitcoin": "Bitcoin kripto para",
+    "ethereum": "Ethereum kripto",
+    "binancecoin": "BNB Binance kripto",
+    "solana": "Solana SOL kripto",
+    "ripple": "XRP Ripple kripto",
+    "usd": "dolar TRY kur",
+    "eur": "euro TRY kur",
+    "gbp": "sterlin TRY kur",
+    "gold": "altın gram fiyat",
+    "silver": "gümüş fiyat",
+    "thyao": "Türk Hava Yolları THYAO borsa",
+    "garan": "Garanti Bankası GARAN hisse",
+    "asels": "Aselsan ASELS borsa",
+    "eregl": "Ereğli Demir EREGL hisse",
+    "bimas": "BİM BIMAS borsa"
+}
+
+Same fallback mock data if no API key.
+
+---
+
+SERVICE: services/gemini.py
+
+All previous functions PLUS:
+
+async def predict_asset(
+    asset_name: str,
+    category: str,
+    current_price: float,
+    buy_price: float,
+    amount: float,
+    unit: str,
+    price_history: list[float],
+    news_articles: list[dict],
+    technicals: dict
+) -> dict:
+
+Build this prompt:
+"""
+Sen bir finansal tahmin analistisin.
+Aşağıdaki verilere dayanarak 
+{asset_name} için tahmin üret.
+
+KATEGORİ: {category}
+MEVCUT FİYAT: {current_price}
+ALIŞ FİYATI: {buy_price}
+MİKTAR: {amount} {unit}
+TOPLAM MALİYET: {total_cost}
+
+SON 30 GÜN FİYAT HAREKETİ:
+Başlangıç: {history[0]}
+Bitiş: {history[-1]}
+Min: {min(history)}
+Max: {max(history)}
+Değişim: {change_pct}%
+
+TEKNİK GÖSTERGELER:
+RSI: {rsi}
+Trend: {trend}
+Destek: {support}
+Direnç: {resistance}
+
+SON HABERLER:
+{news_summary}
+
+SADECE şu JSON formatında yanıt ver:
+{{
+    "1_hafta": {{
+        "price": <tahmini fiyat>,
+        "change_percent": <değişim yüzdesi>,
+        "profit_loss": <kar/zarar tutarı>
+    }},
+    "1_ay": {{
+        "price": <tahmini fiyat>,
+        "change_percent": <değişim yüzdesi>,
+        "profit_loss": <kar/zarar tutarı>
+    }},
+    "3_ay": {{
+        "price": <tahmini fiyat>,
+        "change_percent": <değişim yüzdesi>,
+        "profit_loss": <kar/zarar tutarı>
+    }},
+    "6_ay": {{
+        "price": <tahmini fiyat>,
+        "change_percent": <değişim yüzdesi>,
+        "profit_loss": <kar/zarar tutarı>
+    }},
+    "analysis": "<3-4 cümle genel analiz, Türkçe>",
+    "key_factors": [
+        "<etken 1>",
+        "<etken 2>",
+        "<etken 3>"
+    ],
+    "risk_level": "<DÜŞÜK veya ORTA veya YÜKSEK>"
+}}
+
+Tahminler gerçekçi ve tutarlı olsun.
+Değişim yüzdeleri mantıklı aralıklarda olsun
+(kripto için ±5-40%, döviz için ±2-15%, 
+hisse için ±5-25%).
+"""
+
+Same JSON parsing with try/except and fallback.
+
+Fallback prediction:
+Generate based on simple trend calculation:
+1h: current * 1.02, 1m: current * 1.05,
+3m: current * 1.12, 6m: current * 1.20
+
+---
+
+ROUTER: routers/prices.py
+
+GET /api/price/{asset}
+
+Route to correct service:
+- kripto IDs → coingecko.get_crypto_price
+- gold, silver → gold.get_metal_price
+- usd, eur, gbp → forex.get_forex_rate
+- thyao, garan, etc → stocks.get_stock_price
+
+ALLOWED_ASSETS = [
+    "bitcoin","ethereum","binancecoin","solana","ripple",
+    "usd","eur","gbp","gold","silver",
+    "thyao","garan","asels","eregl","bimas"
+]
+
+If asset not in ALLOWED_ASSETS:
+raise HTTPException(400, "Geçersiz varlık")
+
+---
+
+ROUTER: routers/analysis.py
+
+POST /api/analyze
+Body: { "asset": str, "category": str }
+
+Steps (same as before with category routing):
+
+Step 1: Get price based on category + asset
+Step 2: Get history based on category + asset
+Step 3: Calculate technicals
+Step 4: Get news
+Step 5: asyncio.gather(
+    analyze_news_sentiment(...),
+    analyze_technicals(...)
+)
+Step 6: generate_recommendation(...)
+Step 7: Return AnalysisResponse
+
+---
+
+ROUTER: routers/prediction.py  ← NEW
+
+POST /api/predict
+Body: PredictRequest
+
+Steps:
+
+Step 1: Get current price
+  (same category routing as prices.py)
+
+Step 2: Get price history (30 days)
+
+Step 3: Extract close prices, 
+  calculate technicals
+
+Step 4: Get news articles (max 5)
+
+Step 5: Call gemini.predict_asset(
+    asset_name, category, current_price,
+    buy_price, amount, unit,
+    close_prices, news_articles, technicals
+)
+
+Step 6: Build PredictResponse:
+  - total_cost = amount * buy_price
+  - current_value = amount * current_price
+  - current_profit_loss = current_value - total_cost
+  - For each period: is_profit = profit_loss > 0
+  - chart_data: build from current + 4 predictions
+  - Fill all fields
+
+Return PredictResponse
+
+---
+
+ROUTER: routers/alerts.py
+
+Same as before. In-memory storage.
+POST /api/alerts
+GET /api/alerts
+DELETE /api/alerts/{id}
+
+---
+
+ROUTER: routers/news.py
+
+GET /api/news/{asset}
+Same as before.
+
+---
+
+main.py:
+
+Include all 5 routers with prefix="/api":
+prices, news, analysis, prediction, alerts
+
+CORS as specified.
+GET / → {"status": "ok", "version": "2.0"}
+GET /health → {"status": "healthy"}
+
+---
+
+CRITICAL ERROR HANDLING:
+
+1. Every httpx call: try/except, timeout=10.0
+2. Every Gemini call: try/except with fallback
+3. Never return 500 — always return 
+   meaningful data (mock if necessary)
+4. Strip ```json``` from all Gemini responses
+5. Validate all numeric inputs (amount > 0, 
+   buy_price > 0)
+
+---
+
+requirements.txt:
+fastapi==0.111.0
+uvicorn==0.29.0
+httpx==0.27.0
+google-generativeai==0.5.4
+python-dotenv==1.0.1
+pydantic==2.7.1
+
+---
+
+README.md:
+
+# FinSight AI Backend v2
+
+## Kurulum
+pip install -r requirements.txt
+cp .env.example .env
+# .env dosyasını doldur
+
+## API Keys
+- Gemini: https://aistudio.google.com (ücretsiz)
+- GNews: https://gnews.io (ücretsiz, opsiyonel)
+
+## Çalıştır
+uvicorn main:app --reload --port 8000
+
+## Swagger Test
+http://localhost:8000/docs
+
+## Endpoint Listesi
+GET  /api/price/{asset}
+GET  /api/news/{asset}
+POST /api/analyze
+POST /api/predict
+POST /api/alerts
+GET  /api/alerts
+DELETE /api/alerts/{id}

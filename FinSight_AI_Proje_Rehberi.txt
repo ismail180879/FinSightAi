@@ -1,0 +1,171 @@
+====================================================================
+                        FINSIGHT AI 
+               PROJE REHBERİ VE KULLANIM KILAVUZU
+====================================================================
+
+Bu belge, FinSight AI projesini tam anlamıyla anlamak, sıfırdan 
+kurmak, geliştirmek ve çalıştırmak için gerekli tüm teknik ve 
+operasyonel bilgileri içermektedir. Yeni bir geliştirici veya sistem
+yöneticisi bu dosyayı okuyarak projeye tam hakim olabilir.
+
+--------------------------------------------------------------------
+1. PROJE ÖZETİ
+--------------------------------------------------------------------
+FinSight AI, modern bir finansal analiz ve yapay zeka destekli 
+portföy tahmin (prediction) uygulamasıdır. Kullanıcıların kripto, 
+döviz ve hisse senetlerinden oluşan bir portföy/sepet oluşturmasına
+olanak tanır. Gerçek zamanlı API'lerden çekilen finansal verileri 
+ve güncel haberleri kullanarak Google Gemini AI aracılığıyla gelecek 
+tahminleri (1 Hafta, 1 Ay, 3 Ay, 6 Ay) ve duyarlılık analizleri üretir.
+
+--------------------------------------------------------------------
+2. TEKNOLOJİ YIĞINI (TECH STACK)
+--------------------------------------------------------------------
+[FRONTEND - Ön Yüz]
+- Kütüphane: React 19
+- Build Aracı: Vite
+- Stil Dili: Tailwind CSS v4
+- Grafikler: Recharts
+- Port: http://localhost:5173
+
+[BACKEND - Arka Yüz]
+- Dil: Python 3.x
+- Framework: FastAPI
+- Sunucu: Uvicorn
+- Yapay Zeka: Google Generative AI (Gemini)
+- HTTP İstemcisi: httpx
+- Port: http://localhost:8000 (Veya 127.0.0.1:8000)
+
+--------------------------------------------------------------------
+3. KLASÖR MİMARİSİ
+--------------------------------------------------------------------
+Proje ana dizininde ("FinSight/") iki ana bileşen yer alır:
+
+FinSight/
+├── Frontend/           # React kullanıcı arayüzü
+│   ├── src/
+│   │   ├── app/        # Uygulama kodları (Bileşenler, Sayfalar)
+│   │   │   ├── components/ # Tekrar kullanılabilir arayüz elemanları
+│   │   │   ├── pages/      # Tahmin, Analiz gibi ana sayfalar
+│   │   │   └── services/   # Backend ile haberleşen API katmanı (api.ts)
+│   │   └── data/       # Statik veriler (Varlık listesi vb.)
+│   ├── package.json    # Frontend bağımlılıkları
+│   └── vite.config.ts  # Vite yapılandırması
+│
+└── Backend/            # FastAPI arka plan servisi
+    ├── main.py         # Uygulamanın giriş ve ayar noktası (CORS dahil)
+    ├── requirements.txt# Python kütüphaneleri
+    ├── .env            # Gizli API anahtarlarının tutulduğu dosya
+    ├── routers/        # Uç noktalar (Endpoint: fiyat, analiz, haber)
+    ├── services/       # Dış API'lere bağlanan mantık katmanı
+    │   ├── coingecko.py # Kripto para fiyatları
+    │   ├── forex.py     # Döviz kurları (Frankfurter)
+    │   ├── gemini.py    # Yapay zeka ve tahmin mantığı
+    │   ├── gnews.py     # Güncel finans haberleri
+    │   ├── gold.py      # Değerli metaller
+    │   └── stocks.py    # BİST hisseleri
+    ├── models/         # Veri şemaları (Pydantic / schemas.py)
+    └── utils/          # Yardımcı hesaplamalar (technicals.py - RSI, MA)
+
+--------------------------------------------------------------------
+4. DIŞ SERVİSLER VE API ENTEGRASYONLARI
+--------------------------------------------------------------------
+Sistemin verimli çalışması için çeşitli veri kaynakları kullanılır:
+
+- Kripto Paralar: "CoinGecko API" (Ücretsiz, limitsiz açık uç nokta).
+- Döviz Kurları: "Frankfurter API" (ECB tabanlı ücretsiz kur verisi).
+- Altın ve Gümüş: "Metals.Live API" (Ücretsiz anlık ons/gram verisi).
+- Hisse Senetleri: Türk borsası için güvenilir açık ücretsiz API 
+  olmadığından sistem içi özel bir mantıkla (algoritmik) hesaplanır.
+- Haberler: "GNews API" (Varlığa özel günlük haber akışı).
+- Yapay Zeka: "Google Gemini 1.5 Flash". Analizleri derler ve 
+  gelecek tahmini yapar.
+
+--------------------------------------------------------------------
+5. KURULUM VE ÇALIŞTIRMA (ADIM ADIM)
+--------------------------------------------------------------------
+Sistemi sıfırdan çalıştırmak için iki adet komut istemcisi (Terminal) 
+açmalısınız. Birisi Frontend diğeri Backend için çalışacaktır.
+
+ADIM A: BACKEND'İ BAŞLATMAK
+1. Terminal açın ve Backend klasörüne gidin:
+   cd C:\Users\Kullanici_Adiniz\Desktop\FinSight\Backend
+   
+2. Gerekli kütüphaneleri kurun:
+   pip install -r requirements.txt
+   
+3. ".env" ayarlarını yapın:
+   Backend klasöründeki ".env" dosyasını bir metin editörüyle açın.
+   GEMINI_API_KEY=buraya_google_aistudio_anahtarı_gelecek
+   (Anahtarı https://aistudio.google.com/ adresinden ücretsiz alabilirsiniz.)
+   (Eğer GNEWS_API_KEY varsa onu da ekleyin, yoksa sistem otomatik 
+    haber senaryoları üreterek kesintisiz çalışmaya devam eder).
+    
+4. Sunucuyu başlatın:
+   python -m uvicorn main:app --reload --port 8000
+   (Başarılı mesajından sonra http://localhost:8000/docs adresine 
+    giderek Swagger arayüzünden tüm API'leri test edebilirsiniz.)
+
+ADIM B: FRONTEND'İ BAŞLATMAK
+1. İkinci bir terminal açın ve Frontend klasörüne gidin:
+   cd C:\Users\Kullanici_Adiniz\Desktop\FinSight\Frontend
+   
+2. NPM paketlerini kurun:
+   npm install
+   
+3. React uygulamasını başlatın:
+   npm run dev
+   (http://localhost:5173 adresinden uygulamaya erişebilirsiniz).
+
+---
+ÖNEMLİ NOT: 
+Frontend `api.ts` dosyasında `const MOCK = true;` yazan bir satır 
+bulunur. Sistemin canlı (gerçek backend'den) veri çekmesini 
+istiyorsanız Frontend/src/app/services/api.ts dosyasını açıp 
+en üstteki MOCK değişkenini `false` yapmalısınız:
+`const MOCK = false;`
+--------------------------------------------------------------------
+
+--------------------------------------------------------------------
+6. ÇALIŞMA MANTIĞI VE TEMEL AKIŞLAR
+--------------------------------------------------------------------
+Tasarımın Kalbi: "Sepet (Portfolio) Mantığı"
+Kullanıcı, "Tahmin Hesapla" sayfasına girer. Online alışveriş yapar 
+gibi Kripto, Döviz veya Hisse mağazasından varlık seçer, alış 
+fiyatını ve miktarını belirleyerek sepete ekler.
+
+Tahmin Et Butonuna Basıldığında Ne Olur?
+1. Frontend, sepetteki her varlık için Backend'in "/api/predict" 
+   uç noktasına paralel istek atar.
+2. Backend (predict.py router'ı), varlığın ilgili servisinden 
+   (örn. CoinGecko) güncel fiyatı ve geçmiş 30 günlük grafiğini çeker.
+3. Backend (technicals.py), grafiği analiz eder; RSI, Hareketli 
+   Ortalamalar, Destek ve Direnç seviyelerini matematiksel olarak bulur.
+4. Backend (gnews.py), varlıkla ilgili son finansal haberleri bulur.
+5. Backend (gemini.py), Fiyat, Teknik Analiz ve Haberleri bir araya 
+   getirir ve Google Gemini Yapay Zeka'sına bir komut (Prompt) gönderir.
+6. Gemini; geçmiş verilerle piyasa duyarlılığını harmanlayarak 
+   1 Hafta, 1 Ay, 3 Ay ve 6 Ay için matematiksel oranlarla değer
+   tahminleri ve Türkçe analitik yorum üretip JSON formatında döner.
+7. Frontend, dönen sonuçları birleştirip "Tüm Portföy" (toplam kâr/zarar)
+   grafiğini çizer. Kullanıcı dilerse "Bitcoin" vb. varlıklara özel 
+   sekmelere tıklayarak detay analizlere ulaşabilir.
+
+--------------------------------------------------------------------
+7. SORUN GİDERME (TROUBLESHOOTING)
+--------------------------------------------------------------------
+* "Port çakışması hatası (Port 5173 is already in use)": 
+  Aynı anda birden fazla React sunucusu çalışıyordur. Görev Yöneticisi'nden
+  node.exe işlemlerini sonlandırın veya CMD'den "taskkill /F /IM node.exe" yazın.
+  
+* "Yapay Zeka API Hatası / Tahminler Sabit Geliyor": 
+  GEMINI_API_KEY süresi dolmuş, yanlış girilmiş veya limit aşılmış olabilir.
+  Sistem tasarımı gereği çökmez, bunun yerine teknik analiz (matematiksel 
+  trend çizgisi) bazlı standart tahminleri ekrana basmaya (Fallback) 
+  devam eder. Düzenlemek için .env dosyasındaki anahtarı güncelleyin.
+
+* "CORS Hatası": 
+  Frontend ve Backend iletişim kuramıyor demektir. Backend/main.py 
+  dosyasındaki `allow_origins` listesinde "http://localhost:5173" 
+  olduğundan emin olun.
+====================================================================
